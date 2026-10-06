@@ -39,6 +39,8 @@ def build(votos, detalhe, ano, turno, candidato, nivel="municipio"):
 
     ref_pct = df.votos_cand.sum() / df.validos.sum()
     ref_abst = df.QT_ABSTENCOES.sum() / df.QT_APTOS.sum()
+    df["abst_excedente"] = ((df.taxa_abst - ref_abst).clip(lower=0)
+                        * df.QT_APTOS * df.pct_cand).round().astype(int)
     base_forte = df.pct_cand >= ref_pct
     abst_alta = df.taxa_abst >= ref_abst
     apertada = df.margem.abs() <= MARGEM_APERTADA
