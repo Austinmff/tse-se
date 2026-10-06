@@ -34,7 +34,9 @@ turnos = sorted(votos[votos.ANO_ELEICAO == ano].NR_TURNO.unique())
 turno = st.sidebar.selectbox("Turno", turnos)
 sel = votos[(votos.ANO_ELEICAO == ano) & (votos.NR_TURNO == turno)
             & ~votos.NR_VOTAVEL.isin(BRANCO_NULO)]
-candidato = st.sidebar.selectbox("Candidato", sorted(sel.NM_VOTAVEL.unique()))
+nomes = sorted(sel.NM_VOTAVEL.unique())
+idx_padrao = next((i for i, n in enumerate(nomes) if "LULA" in n), 0)
+candidato = st.sidebar.selectbox("Candidato", nomes, index=idx_padrao)
 nivel = "municipio"
 
 df = build(votos, detalhe, ano, turno, candidato, nivel)
