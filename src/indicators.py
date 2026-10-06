@@ -3,6 +3,7 @@ import pandas as pd
 
 BRANCO_NULO = {95, 96}
 MARGEM_APERTADA = 0.05
+VOLUME_ACUM = 0.5
 
 
 def build(votos, detalhe, ano, turno, candidato, nivel="municipio"):
@@ -39,15 +40,21 @@ def build(votos, detalhe, ano, turno, candidato, nivel="municipio"):
 
     ref_pct = df.votos_cand.sum() / df.validos.sum()
     ref_abst = df.QT_ABSTENCOES.sum() / df.QT_APTOS.sum()
+
     df["abst_excedente"] = ((df.taxa_abst - ref_abst).clip(lower=0)
-                        * df.QT_APTOS * df.pct_cand).round().astype(int)
+                            * df.QT_APTOS * df.pct_cand).round().astype(int)
+
+    df = df.sort_values("votos_potenciais", ascending=False).reset_index(drop=True)
+    acum = df.votos_potenciais.cumsum() / max(df.votos_potenciais.sum(), 1)
+    volume_alto = acum.shift(fill_value=0) < VOLUME_ACUM
+
     base_forte = df.pct_cand >= ref_pct
     abst_alta = df.taxa_abst >= ref_abst
     apertada = df.margem.abs() <= MARGEM_APERTADA
 
     df["categoria"] = np.select(
-        [base_forte & abst_alta, apertada, base_forte],
-        ["Mobilizar", "Persuadir", "Manter"],
+        [volume_alto, base_forte & abst_alta, apertada, base_forte],
+        ["Prioridade alta", "Mobilizar", "Persuadir", "Manter"],
         default="Baixa prioridade",
     )
-    return df.sort_values("votos_potenciais", ascending=False).reset_index(drop=True)
+    return df
