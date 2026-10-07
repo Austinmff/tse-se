@@ -19,8 +19,8 @@ def sem_acento(s):
 
 
 res = pd.read_csv("data/processed/secao_presidente_2026_SE.csv")
-sec = pd.read_csv("data/processed/secoes_se.csv").rename(
-    columns={"QT_ELEITOR_SECAO": "aptos"})
+sec = pd.read_csv("data/processed/secoes_se.csv")
+sec = sec.rename(columns={"QT_ELEITOR_SECAO": "aptos"})
 sec["CD_MUNICIPIO"] = sec.CD_MUNICIPIO.astype(int)
 
 comp = res.groupby(CHAVE).QT_VOTOS.sum().rename("comparecimento")
@@ -30,9 +30,9 @@ tot = pd.concat([comp, bra, nul], axis=1).reset_index()
 
 base = sec.merge(tot, on=CHAVE, how="left")
 sem_res = base[base.comparecimento.isna()]
-print("seções sem resultado:", len(sem_res),
-      "| eleitores nelas:", int(sem_res.aptos.sum()),
-      "| só em Aracaju:", int((sem_res.CD_MUNICIPIO == ARACAJU).sum()))
+print("seções sem resultado:", len(sem_res))
+print("eleitores nelas:", int(sem_res.aptos.sum()))
+print("só em Aracaju:", int((sem_res.CD_MUNICIPIO == ARACAJU).sum()))
 print(sem_res.groupby("NM_MUNICIPIO").size().sort_values(ascending=False).head(5))
 
 base = base[base.comparecimento.notna()].copy()
@@ -43,19 +43,52 @@ base["abstencoes"] = (base.aptos - base.comparecimento).clip(lower=0)
 
 ara = base[base.CD_MUNICIPIO == ARACAJU].copy()
 ara["bairro"] = ara.NM_BAIRRO.map(sem_acento)
-ara["escola"] = (ara.NM_LOCAL_VOTACAO + " - " + ara.bairro
-                 + " (zona " + ara.NR_ZONA.astype(str) + ")")
+ara["escola"] = (
+    ara.NM_LOCAL_VOTACAO + " - " + ara.bairro + " (zona " + ara.NR_ZONA.astype(str) + ")"
+)
 
 
 def unidades(df_sec, col):
-    ids = {n: i + 1 for i, n in enumerate(sorted(df_sec[col].unique()))}
+    nomes = sorted(df_sec[col].unique())
+    ids = {n: i + 1 for i, n in enumerate(nomes)}
     df_sec = df_sec.assign(uid=df_sec[col].map(ids))
-    v = (res.merge(df_sec[CHAVE + ["uid", col]], on=CHAVE)
-         .groupby(["uid", col, "NR_VOTAVEL", "NM_VOTAVEL"], as_index=False)
-         .QT_VOTOS.sum()
-         .rename(columns={col: "NM_MUNICIPIO", "uid": "CD_MUNICIPIO"}))
-    v["ANO_ELEICAO"], v["NR_TURNO"], v["NR_ZONA"] = 2026, 1, 0
-    d = (df_sec.groupby(["uid", col], as_index=False)
-         .agg(QT_APTOS=("aptos", "sum"),
-              QT_COMPARECIMENTO=("comparecimento", "sum"),
-              QT_ABSTENCOES=("abstencoes", "sum"),
+
+    juntos = res.merge(df_sec[CHAVE + ["uid", col]], on=CHAVE)
+    chaves_v = ["uid", col, "NR_VOTAVEL", "NM_VOTAVEL"]
+    v = juntos.groupby(chaves_v, as_index=False).QT_VOTOS.sum()
+    v = v.rename(columns={col: "NM_MUNICIPIO", "uid": "CD_MUNICIPIO"})
+    v["ANO_ELEICAO"] = 2026
+    v["NR_TURNO"] = 1
+    v["NR_ZONA"] = 0
+
+    g = df_sec.groupby(["uid", col], as_index=False)
+    d = g.agg(
+        QT_APTOS=("aptos", "sum"),
+        QT_COMPARECIMENTO=("comparecimento", "sum"),
+        QT_ABSTENCOES=("abstencoes", "sum"),
+        QT_VOTOS_BRANCOS=("brancos", "sum"),
+        QT_VOTOS_NULOS=("nulos", "sum"),
+    )
+    d = d.rename(columns={col: "NM_MUNICIPIO", "uid": "CD_MUNICIPIO"})
+    d["ANO_ELEICAO"] = 2026
+    d["NR_TURNO"] = 1
+    d["NR_ZONA"] = 0
+    return v, d
+
+
+for nome, col in [("bairros", "bairro"), ("escolas", "escola")]:
+    v, d = unidades(ara, col)
+    v.to_csv(OUT / f"{nome}_votos.csv", index=False)
+    d.to_csv(OUT / f"{nome}_detalhe.csv", index=False)
+    lula = v[v.NR_VOTAVEL == 13].NM_VOTAVEL.iloc[0]
+    df = build(v, d, 2026, 1, lula)
+    print(f"\n{nome.upper()}: {len(df)} unidades")
+    cols = ["NM_MUNICIPIO", "QT_APTOS", "taxa_abst", "pct_cand", "votos_potenciais", "categoria"]
+    print(df.head(8)[cols].to_string())
+
+det = pd.read_csv("data/processed/detalhe_2026.csv")
+a = det[det.CD_MUNICIPIO == ARACAJU]
+print("\nAracaju, comparecimento: por seção", int(ara.comparecimento.sum()),
+      "| oficial", int(a.QT_COMPARECIMENTO.sum()))
+print("Aracaju, eleitores: por seção", int(ara.aptos.sum()),
+      "| oficial", int(a.QT_APTOS.sum()))
