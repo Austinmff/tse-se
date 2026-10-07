@@ -6,4 +6,7 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 .env
-.DS_Store
+.DS_Store!data/processed/votos_2026.csv
+!data/processed/detalhe_2026.csv
+!data/processed/zonas_locais.csv
+!data/processed/aracaju/
